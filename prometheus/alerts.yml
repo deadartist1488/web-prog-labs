@@ -1,0 +1,30 @@
+groups:
+  - name: library-api
+    rules:
+      - alert: HighErrorRate
+        expr: sum(rate(http_errors_total[5m])) / sum(rate(http_requests_total[5m])) > 0.05
+        for: 2m
+        labels: { severity: critical }
+        annotations:
+          summary: "Больше 5% ответов 5xx за 5 минут"
+
+      - alert: SlowResponses
+        expr: histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le)) > 1
+        for: 5m
+        labels: { severity: warning }
+        annotations:
+          summary: "p95 времени ответа больше 1 секунды"
+
+      - alert: EmailQueueGrowing
+        expr: max(email_queue_size) > 100
+        for: 10m
+        labels: { severity: warning }
+        annotations:
+          summary: "Очередь писем не разбирается (worker упал?)"
+
+      - alert: InstanceDown
+        expr: up{job="library-api"} == 0
+        for: 1m
+        labels: { severity: critical }
+        annotations:
+          summary: "Экземпляр {{ $labels.instance }} недоступен"

@@ -1,0 +1,48 @@
+# Лаба 7: вывод демонстраций (PostgreSQL)
+
+## Задание 1. Перевод между счетами
+до:                {1: Decimal('1000.00'), 2: Decimal('500.00')}
+перевод 300 1->2:  {1: Decimal('700.00'), 2: Decimal('800.00')}
+перевод 5000 2->1: InsufficientFunds: На счёте 2 800.00, нужно 5000; ROLLBACK, балансы {1: Decimal('700.00'), 2: Decimal('800.00')}
+перевод на счёт 99: AccountNotFound: Счёт 99 не найден; ROLLBACK, балансы {1: Decimal('700.00'), 2: Decimal('800.00')}
+
+## Задания 2 и 4. Гонка за последнее место (5 потоков, 1 место)
+{'method': 'register_naive', 'threads': 5, 'seats_initial': 1, 'seats_left': -4, 'registrations': 5, 'ok': 5, 'no_seats': 0, 'check_violation': 0, 'elapsed_ms': 228.9}
+{'method': 'register_for_update', 'threads': 5, 'seats_initial': 1, 'seats_left': 0, 'registrations': 1, 'ok': 1, 'no_seats': 4, 'check_violation': 0, 'elapsed_ms': 213.8}
+{'method': 'register_atomic', 'threads': 5, 'seats_initial': 1, 'seats_left': 0, 'registrations': 1, 'ok': 1, 'no_seats': 4, 'check_violation': 0, 'elapsed_ms': 11.3}
+с CHECK (seats >= 0), наивный вариант: {'method': 'register_naive', 'threads': 5, 'seats_initial': 1, 'seats_left': 0, 'registrations': 1, 'ok': 1, 'no_seats': 0, 'check_violation': 4, 'elapsed_ms': 224.1}
+
+## Задание 3. UNIQUE(user_id, course_id)
+Вы записаны на курс
+повтор: AlreadyRegistered: Вы уже записаны на этот курс
+
+## Задания 5, 6. Индексы и EXPLAIN (ix_users, 50 000 строк)
+запрос          план до                        cost до    мс до | план после                             cost после  мс после
+q1_email        Seq Scan on ix_users            1093.0    10.96 | Index Scan using idx_users_email on i         8.4      0.18
+q2_name_age     Seq Scan on ix_users            1218.0     7.81 | Index Scan using idx_users_name_age o         8.3      0.09
+q3_age          Seq Scan on ix_users            1093.0     6.47 | Bitmap Heap Scan on ix_users                500.6      0.77
+q4_active_city  Seq Scan on ix_users            1093.0     7.79 | Bitmap Heap Scan on ix_users                574.7      0.09
+
+## Задание 9. Левый префикс, индекс (name, age, city)
+WHERE name       -> Bitmap Heap Scan on ix_users                                 index=True cost=151.2
+WHERE name_age   -> Index Scan using idx_users_name_age_city on ix_users         index=True cost=8.3
+WHERE age        -> Seq Scan on ix_users                                         index=False cost=1093.0
+WHERE city       -> Seq Scan on ix_users                                         index=False cost=1093.0
+WHERE name_city  -> Bitmap Heap Scan on ix_users                                 index=True cost=23.3
+
+## Задание 10. Медленный отчёт по заказам (ix_orders, 200 000 строк)
+before: cost=7073.0 time=91.53 ms
+  узлы: HashAggregate | Hash Join | Seq Scan on ix_orders o | Seq Scan on ix_users u
+after: cost=4850.8 time=55.24 ms
+  узлы: HashAggregate | Hash Join | Bitmap Heap Scan on ix_orders o | Bitmap Index Scan on idx_orders_status_created | Seq Scan on ix_users u
+
+## Задание 7. N+1, сырой SQL (100 читателей x 5 выдач)
+raw_n_plus_1   queries=101  orders=500  time=29.43 ms
+raw_join       queries=1    orders=500  time=1.08 ms
+raw_in         queries=2    orders=500  time=1.45 ms
+
+## Задание 8. SQLAlchemy: lazy / joinedload / subqueryload / selectinload
+get_users_without_eager        queries=101  orders=500  time=146.54 ms
+get_users_with_joinedload      queries=1    orders=500  time=14.24 ms
+get_users_with_subqueryload    queries=2    orders=500  time=13.82 ms
+get_users_with_selectinload    queries=2    orders=500  time=14.43 ms

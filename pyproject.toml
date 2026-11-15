@@ -1,0 +1,11 @@
+[tool.ruff]
+line-length = 120
+target-version = "py39"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B"]
+ignore = ["B008"]  # Depends(...) в аргументах — нормальная практика FastAPI
+
+[tool.coverage.run]
+source = ["app", "lab07"]
+omit = ["app/worker.py"]

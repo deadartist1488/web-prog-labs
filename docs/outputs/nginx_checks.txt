@@ -1,0 +1,43 @@
+## 1. HTTP -> HTTPS
+GET http://localhost:8080/health -> 301 Location: https://localhost:8443/health
+
+## 2. Заголовки ответа через nginx (версии nginx нет, есть HSTS и X-Request-ID)
+HTTP/1.1 200 OK
+Server: nginx
+x-request-id: 94ef7cd21e75fca6a274f3c357c7307a
+content-security-policy: default-src 'self'; img-src 'self' data: https://fastapi.tiangolo.com; script-src 'self' https://cdn.jsdelivr.net 'unsafe-inline'; style-src 'self' https://cdn.jsdelivr.net 'unsafe-inline'; frame-ancestors 'self'
+Strict-Transport-Security: max-age=31536000; includeSubDomains
+X-Frame-Options: SAMEORIGIN
+X-Content-Type-Options: nosniff
+
+## 3. Статика: кэширование и gzip
+HTTP/1.1 200 OK
+Content-Type: text/css
+Expires: Tue, 15 Dec 2026 19:34:29 GMT
+Cache-Control: max-age=2592000
+HTTP/1.1 200 OK
+Content-Encoding: gzip
+
+## 4. Передача заголовков приложению (X-Forwarded-For, X-Real-IP)
+{"time":"2026-11-15T19:34:29.452045+00:00","x_forwarded_for":"203.0.113.7, 127.0.0.1","x_real_ip":"127.0.0.1"}
+
+## 5. Балансировка least_conn между 127.0.0.1:8000 и 127.0.0.1:8001 (12 запросов /health, 4 потока)
+      6 upstream=127.0.0.1:8000
+      6 upstream=127.0.0.1:8001
+round-robin (порт 8081, 12 последовательных запросов):
+      6 upstream=127.0.0.1:8000
+      6 upstream=127.0.0.1:8001
+
+## 6. Rate limiting: 60 одновременных запросов, лимит 10 r/s + burst 20
+     34 200
+     26 429
+тело ответа 429:
+{"error":{"code":"TOO_MANY_REQUESTS","message":"rate limit","details":[],"request_id":"6429435e5058045d3cb63cb8ea6d91eb"}}
+
+## 7. Тайм-аут: /api/long с proxy_read_timeout 3s
+seconds=1 -> 200 in 1.046485s
+{"error":{"code":"GATEWAY_TIMEOUT","message":"upstream timeout","details":[],"request_id":"9e83a9356174668c64dc831fd15af058"}}
+seconds=5 -> 504 in 3.031160s
+
+## 8. Строка access.log (custom формат с request_time и upstream)
+127.0.0.1 - [15/Nov/2026:21:34:44 +0200] "GET /api/long?seconds=5 HTTP/1.1" 504 126 "curl/8.23.0" rt=3.006 urt=3.006 upstream=127.0.0.1:8000 rid=9e83a9356174668c64dc831fd15af058

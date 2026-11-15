@@ -1,0 +1,105 @@
+# Полный стенд: nginx -> 2 экземпляра app -> PostgreSQL + Redis, worker для очереди писем, Prometheus.
+# Запуск: cp .env.example .env && docker compose up -d --build
+services:
+  nginx:
+    image: nginx:1.27-alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/proxy_params.conf:/etc/nginx/proxy_params_library:ro
+      - ./nginx/static:/var/www/static:ro
+      - ./nginx/certs:/etc/nginx/certs:ro
+      - nginx_logs:/var/log/nginx
+    depends_on:
+      app1:
+        condition: service_healthy
+      app2:
+        condition: service_healthy
+    restart: unless-stopped
+
+  app1: &app
+    build: .
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-library}:${POSTGRES_PASSWORD:-library123}@postgres:5432/${POSTGRES_DB:-library}
+      REDIS_URL: redis://redis:6379/0
+      LOG_FILE: /var/log/app/app.log
+      INSTANCE: app1
+    volumes:
+      - app_logs:/var/log/app
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    # порт наружу не публикуем: доступ только через nginx
+
+  app2:
+    <<: *app
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-library}:${POSTGRES_PASSWORD:-library123}@postgres:5432/${POSTGRES_DB:-library}
+      REDIS_URL: redis://redis:6379/0
+      LOG_FILE: /var/log/app/app2.log
+      INSTANCE: app2
+
+  worker:
+    build: .
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-library}:${POSTGRES_PASSWORD:-library123}@postgres:5432/${POSTGRES_DB:-library}
+      REDIS_URL: redis://redis:6379/0
+    command: ["python", "-m", "app.worker"]
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      disable: true
+
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-library}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-library123}
+      POSTGRES_DB: ${POSTGRES_DB:-library}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./migrations:/docker-entrypoint-initdb.d:ro   # миграции применяются при первом старте
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-library} -d ${POSTGRES_DB:-library}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
+    ports:
+      - "9090:9090"
+    depends_on:
+      - app1
+      - app2
+
+volumes:
+  postgres_data:
+  redis_data:
+  app_logs:
+  nginx_logs:

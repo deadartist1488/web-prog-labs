@@ -1,0 +1,15 @@
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.env
+*.db
+*.log
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+nginx/certs/
+tools/
+.idea/
+.vscode/

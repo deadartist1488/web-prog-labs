@@ -1,0 +1,42 @@
+........................................................................ [ 59%]
+.................................................                        [100%]
+=============================== tests coverage ================================
+_______________ coverage: platform win32, python 3.9.5-final-0 ________________
+
+Name                           Stmts   Miss  Cover
+--------------------------------------------------
+app\__init__.py                    0      0   100%
+app\config.py                     30      1    97%
+app\db.py                         30      0   100%
+app\deps.py                       57      3    95%
+app\errors.py                     75      6    92%
+app\examples.py                   32      0   100%
+app\infra.py                      84      5    94%
+app\logging_setup.py              41      1    98%
+app\main.py                       67     17    75%
+app\middleware.py                 61      0   100%
+app\models.py                     57      0   100%
+app\repositories\__init__.py       5      0   100%
+app\repositories\books.py         49      2    96%
+app\repositories\loans.py         24      0   100%
+app\repositories\reviews.py       20      0   100%
+app\repositories\users.py         38      1    97%
+app\routers\__init__.py            0      0   100%
+app\routers\auth.py               48      0   100%
+app\routers\books.py              62      0   100%
+app\routers\health.py             44      7    84%
+app\routers\users.py              40      0   100%
+app\routers\web.py                90      0   100%
+app\schemas.py                   146      1    99%
+app\security.py                   57      0   100%
+app\services\__init__.py           0      0   100%
+app\services\auth.py              95      5    95%
+app\services\books.py            152      9    94%
+app\services\users.py             80      6    92%
+lab07\__init__.py                  0      0   100%
+lab07\indexes.py                  51      1    98%
+lab07\nplus1.py                   93      0   100%
+lab07\transactions.py            113      1    99%
+--------------------------------------------------
+TOTAL                           1741     66    96%
+121 passed in 30.52s

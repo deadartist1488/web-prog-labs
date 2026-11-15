@@ -1,0 +1,55 @@
+# Занятие 3, задания 7 и 9: методы HTTP на httpbin и JSONPlaceholder
+
+$ curl -X GET https://httpbin.org/get
+HTTP 200; эхо: method/url = GET, json = None, args = {}
+
+$ curl -X POST https://httpbin.org/post
+HTTP 200; эхо: method/url = POST, json = {'age': 30, 'name': 'John'}, args = {}
+
+$ curl -X PUT https://httpbin.org/put
+HTTP 200; эхо: method/url = PUT, json = {'age': 30, 'name': 'John'}, args = {}
+
+$ curl -X PATCH https://httpbin.org/patch
+HTTP 200; эхо: method/url = PATCH, json = {'age': 30, 'name': 'John'}, args = {}
+
+$ curl -X DELETE https://httpbin.org/delete
+HTTP 200; эхо: method/url = DELETE, json = {'age': 30, 'name': 'John'}, args = {}
+
+$ curl https://jsonplaceholder.typicode.com/posts
+HTTP 200
+100 постов, ключи: ['userId', 'id', 'title', 'body']
+
+$ curl https://jsonplaceholder.typicode.com/posts/1
+{
+  "userId": 1,
+  "id": 1,
+  "title": "sunt aut facere repellat provident occaecati excepturi optio reprehenderit",
+  "body": "quia et suscipit\nsuscipit recusandae consequuntur expedita et cum\nreprehenderit molestiae ut ut quas totam\nnostrum rerum est autem sunt rem eveniet architecto"
+}
+HTTP 200
+
+$ curl -X POST https://jsonplaceholder.typicode.com/posts -d '{"title":"foo","body":"bar","userId":1}'
+{
+  "title": "foo",
+  "body": "bar",
+  "userId": 1,
+  "id": 101
+}
+HTTP 201
+
+$ curl -X PUT https://jsonplaceholder.typicode.com/posts/1 ...
+{
+  "id": 1,
+  "title": "new",
+  "body": "text",
+  "userId": 1
+}
+HTTP 200
+
+$ curl -X DELETE https://jsonplaceholder.typicode.com/posts/1
+{}
+HTTP 200
+
+$ curl https://jsonplaceholder.typicode.com/posts/9999
+{}
+HTTP 404

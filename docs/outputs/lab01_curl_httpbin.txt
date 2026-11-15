@@ -1,0 +1,75 @@
+# Занятие 1, задание 6: curl -v к httpbin.org
+
+$ curl -v https://httpbin.org/get
+> GET /get HTTP/1.1
+> Host: httpbin.org
+> User-Agent: curl/8.23.0
+> Accept: */*
+> 
+< HTTP/1.1 200 OK
+< access-control-allow-credentials: true
+< access-control-allow-origin: *
+< access-control-expose-headers: Retry-After, RateLimit, RateLimit-Policy, WWW-Authenticate
+< content-length: 201
+< content-type: application/json
+< x-content-type-options: nosniff
+< date: Sun, 15 Nov 2026 19:42:00 GMT
+< 
+{ [201 bytes data]
+{
+  "args": {},
+  "headers": {
+  "method": "GET",
+  "origin": "<мой IP скрыт>",
+  "url": "https://httpbin.org/get"
+
+$ curl -v https://httpbin.org/status/404
+> GET /status/404 HTTP/1.1
+> Host: httpbin.org
+> User-Agent: curl/8.23.0
+> Accept: */*
+> 
+< HTTP/1.1 404 Not Found
+< access-control-allow-credentials: true
+< access-control-allow-origin: *
+< access-control-expose-headers: Retry-After, RateLimit, RateLimit-Policy, WWW-Authenticate
+< content-length: 0
+< content-type: text/html; charset=utf-8
+< x-content-type-options: nosniff
+< date: Sun, 15 Nov 2026 19:42:01 GMT
+< 
+
+$ curl -v https://httpbin.org/status/500
+> GET /status/500 HTTP/1.1
+> Host: httpbin.org
+> User-Agent: curl/8.23.0
+> Accept: */*
+> 
+< HTTP/1.1 500 Internal Server Error
+< access-control-allow-credentials: true
+< access-control-allow-origin: *
+< access-control-expose-headers: Retry-After, RateLimit, RateLimit-Policy, WWW-Authenticate
+< content-length: 0
+< content-type: text/html; charset=utf-8
+< x-content-type-options: nosniff
+< date: Sun, 15 Nov 2026 19:42:02 GMT
+< 
+
+$ curl -v -X POST https://httpbin.org/post -H "Content-Type: application/json" -d '{"name": "John", "age": 30}'
+    "Content-Length": "27",
+    "Content-Type": "application/json",
+  },
+  "json": {
+    "age": 30,
+    "name": "John"
+  }
+
+$ curl -H "Authorization: Bearer token123" https://httpbin.org/headers
+{
+  "headers": {
+    "Accept": "*/*",
+    "Authorization": "Bearer token123",
+    "Host": "httpbin.org",
+    "User-Agent": "curl/8.23.0"
+  }
+}

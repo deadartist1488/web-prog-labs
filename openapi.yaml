@@ -1,0 +1,1886 @@
+openapi: 3.1.0
+info:
+  title: Library API
+  description: 'Учебное API библиотеки: пользователи, книги, выдачи, отзывы. Лабораторные 1–10.'
+  version: 1.0.0
+paths:
+  /health:
+    get:
+      tags:
+      - service
+      summary: Проверка живости приложения, БД и Redis
+      operationId: health_health_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+  /auth/register:
+    post:
+      tags:
+      - auth
+      summary: Регистрация
+      operationId: register_auth_register_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserCreate'
+        required: true
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserOut'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /auth/login:
+    post:
+      tags:
+      - auth
+      summary: 'Вход: access (15 мин) + refresh (7 дней)'
+      operationId: login_auth_login_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginIn'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenPair'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /auth/refresh:
+    post:
+      tags:
+      - auth
+      summary: Новый access по refresh (с ротацией)
+      operationId: refresh_auth_refresh_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RefreshIn'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenPair'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /auth/logout:
+    post:
+      tags:
+      - auth
+      summary: 'Выход: access в blacklist, refresh отзывается'
+      operationId: logout_auth_logout_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              anyOf:
+              - $ref: '#/components/schemas/RefreshIn'
+              - type: 'null'
+              title: Data
+      responses:
+        '204':
+          description: Successful Response
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      security:
+      - HTTPBearer: []
+  /auth/profile:
+    get:
+      tags:
+      - auth
+      summary: Профиль (нужен access-токен)
+      operationId: profile_auth_profile_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserOut'
+      security:
+      - HTTPBearer: []
+  /session/login:
+    post:
+      tags:
+      - auth
+      summary: Вход с серверной сессией (cookie sid)
+      operationId: session_login_session_login_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginIn'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserOut'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /session/profile:
+    get:
+      tags:
+      - auth
+      summary: Профиль по сессии
+      operationId: session_profile_session_profile_get
+      parameters:
+      - name: sid
+        in: cookie
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Sid
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserOut'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /session/logout:
+    post:
+      tags:
+      - auth
+      summary: 'Выход: сессия удаляется из Redis'
+      operationId: session_logout_session_logout_post
+      parameters:
+      - name: sid
+        in: cookie
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Sid
+      responses:
+        '204':
+          description: Successful Response
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /users:
+    get:
+      tags:
+      - users
+      summary: Список пользователей (пагинация, поиск, сортировка)
+      operationId: list_users_users_get
+      parameters:
+      - name: page
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 1
+          default: 1
+          title: Page
+      - name: size
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 100
+          minimum: 1
+          default: 20
+          title: Size
+      - name: search
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            maxLength: 50
+          - type: 'null'
+          title: Search
+      - name: min_age
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: integer
+            maximum: 120
+            minimum: 18
+          - type: 'null'
+          title: Min Age
+      - name: sort
+        in: query
+        required: false
+        schema:
+          enum:
+          - id
+          - name
+          - age
+          - created_at
+          type: string
+          default: id
+          title: Sort
+      - name: order
+        in: query
+        required: false
+        schema:
+          enum:
+          - asc
+          - desc
+          type: string
+          default: asc
+          title: Order
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Page_UserOut_'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    post:
+      tags:
+      - users
+      summary: Создать пользователя
+      operationId: create_user_users_post
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserCreate'
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserOut'
+        '400':
+          description: Ошибка валидации
+        '401':
+          description: Не авторизован
+        '403':
+          description: Нет прав
+        '404':
+          description: Не найден
+        '409':
+          description: Конфликт
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /users/{user_id}:
+    get:
+      tags:
+      - users
+      summary: Получить пользователя
+      operationId: get_user_users__user_id__get
+      parameters:
+      - name: user_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: User Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserOut'
+        '400':
+          description: Ошибка валидации
+        '401':
+          description: Не авторизован
+        '403':
+          description: Нет прав
+        '404':
+          description: Не найден
+        '409':
+          description: Конфликт
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    put:
+      tags:
+      - users
+      summary: Полностью обновить (сам или admin)
+      operationId: replace_user_users__user_id__put
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: user_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: User Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserReplace'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserOut'
+        '400':
+          description: Ошибка валидации
+        '401':
+          description: Не авторизован
+        '403':
+          description: Нет прав
+        '404':
+          description: Не найден
+        '409':
+          description: Конфликт
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    patch:
+      tags:
+      - users
+      summary: Частично обновить (сам или admin)
+      operationId: patch_user_users__user_id__patch
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: user_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: User Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserPatch'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserOut'
+        '400':
+          description: Ошибка валидации
+        '401':
+          description: Не авторизован
+        '403':
+          description: Нет прав
+        '404':
+          description: Не найден
+        '409':
+          description: Конфликт
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    delete:
+      tags:
+      - users
+      summary: Удалить (сам или admin)
+      operationId: delete_user_users__user_id__delete
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: user_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: User Id
+      responses:
+        '204':
+          description: Successful Response
+        '400':
+          description: Ошибка валидации
+        '401':
+          description: Не авторизован
+        '403':
+          description: Нет прав
+        '404':
+          description: Не найден
+        '409':
+          description: Конфликт
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /users/{user_id}/loans:
+    get:
+      tags:
+      - users
+      summary: Выдачи пользователя (сам или admin)
+      operationId: user_loans_users__user_id__loans_get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: user_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: User Id
+      - name: active
+        in: query
+        required: false
+        schema:
+          type: boolean
+          default: false
+          title: Active
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/LoanOut'
+                title: Response User Loans Users  User Id  Loans Get
+        '400':
+          description: Ошибка валидации
+        '401':
+          description: Не авторизован
+        '403':
+          description: Нет прав
+        '404':
+          description: Не найден
+        '409':
+          description: Конфликт
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /users/{user_id}/role:
+    put:
+      tags:
+      - users
+      summary: Сменить роль (только admin)
+      operationId: set_role_users__user_id__role_put
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: user_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: User Id
+      - name: role
+        in: query
+        required: true
+        schema:
+          enum:
+          - user
+          - librarian
+          - admin
+          type: string
+          title: Role
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserOut'
+        '400':
+          description: Ошибка валидации
+        '401':
+          description: Не авторизован
+        '403':
+          description: Нет прав
+        '404':
+          description: Не найден
+        '409':
+          description: Конфликт
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /books:
+    get:
+      tags:
+      - books
+      summary: 'Каталог: фильтры, поиск, сортировка, пагинация'
+      operationId: list_books_books_get
+      parameters:
+      - name: page
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 1
+          default: 1
+          title: Page
+      - name: size
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 100
+          minimum: 1
+          default: 20
+          title: Size
+      - name: q
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            maxLength: 100
+          - type: 'null'
+          description: поиск по названию и автору
+          title: Q
+        description: поиск по названию и автору
+      - name: author
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Author
+      - name: genre
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Genre
+      - name: min_price
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: number
+            minimum: 0.0
+          - type: string
+            pattern: ^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$
+          - type: 'null'
+          title: Min Price
+      - name: max_price
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: number
+            minimum: 0.0
+          - type: string
+            pattern: ^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$
+          - type: 'null'
+          title: Max Price
+      - name: available
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          title: Available
+      - name: sort
+        in: query
+        required: false
+        schema:
+          enum:
+          - id
+          - title
+          - year
+          - price
+          type: string
+          default: id
+          title: Sort
+      - name: order
+        in: query
+        required: false
+        schema:
+          enum:
+          - asc
+          - desc
+          type: string
+          default: asc
+          title: Order
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Page_BookOut_'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    post:
+      tags:
+      - books
+      summary: Добавить книгу (librarian/admin)
+      operationId: create_book_books_post
+      security:
+      - HTTPBearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BookCreate'
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BookOut'
+        '400':
+          description: Ошибка валидации
+        '401':
+          description: Не авторизован
+        '403':
+          description: Нет прав
+        '404':
+          description: Не найдено
+        '409':
+          description: Конфликт
+        '422':
+          description: Нарушено бизнес-правило
+  /books/{book_id}:
+    get:
+      tags:
+      - books
+      summary: Книга (кэшируется в Redis)
+      operationId: get_book_books__book_id__get
+      parameters:
+      - name: book_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Book Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BookOut'
+        '400':
+          description: Ошибка валидации
+        '401':
+          description: Не авторизован
+        '403':
+          description: Нет прав
+        '404':
+          description: Не найдено
+        '409':
+          description: Конфликт
+        '422':
+          description: Нарушено бизнес-правило
+    patch:
+      tags:
+      - books
+      summary: Изменить книгу (librarian/admin)
+      operationId: patch_book_books__book_id__patch
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: book_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Book Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BookPatch'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BookOut'
+        '400':
+          description: Ошибка валидации
+        '401':
+          description: Не авторизован
+        '403':
+          description: Нет прав
+        '404':
+          description: Не найдено
+        '409':
+          description: Конфликт
+        '422':
+          description: Нарушено бизнес-правило
+    delete:
+      tags:
+      - books
+      summary: Удалить книгу (librarian/admin)
+      operationId: delete_book_books__book_id__delete
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: book_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Book Id
+      responses:
+        '204':
+          description: Successful Response
+        '400':
+          description: Ошибка валидации
+        '401':
+          description: Не авторизован
+        '403':
+          description: Нет прав
+        '404':
+          description: Не найдено
+        '409':
+          description: Конфликт
+        '422':
+          description: Нарушено бизнес-правило
+  /books/{book_id}/loans:
+    post:
+      tags:
+      - books
+      summary: Взять книгу (поддерживает Idempotency-Key)
+      operationId: borrow_books__book_id__loans_post
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: book_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Book Id
+      - name: idempotency-key
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            maxLength: 100
+          - type: 'null'
+          title: Idempotency-Key
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoanOut'
+        '400':
+          description: Ошибка валидации
+        '401':
+          description: Не авторизован
+        '403':
+          description: Нет прав
+        '404':
+          description: Не найдено
+        '409':
+          description: Конфликт
+        '422':
+          description: Нарушено бизнес-правило
+  /loans/{loan_id}/return:
+    post:
+      tags:
+      - books
+      summary: Вернуть книгу
+      operationId: give_back_loans__loan_id__return_post
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: loan_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Loan Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoanOut'
+        '400':
+          description: Ошибка валидации
+        '401':
+          description: Не авторизован
+        '403':
+          description: Нет прав
+        '404':
+          description: Не найдено
+        '409':
+          description: Конфликт
+        '422':
+          description: Нарушено бизнес-правило
+  /books/{book_id}/reviews:
+    get:
+      tags:
+      - books
+      summary: Отзывы о книге
+      operationId: list_reviews_books__book_id__reviews_get
+      parameters:
+      - name: book_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Book Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ReviewOut'
+                title: Response List Reviews Books  Book Id  Reviews Get
+        '400':
+          description: Ошибка валидации
+        '401':
+          description: Не авторизован
+        '403':
+          description: Нет прав
+        '404':
+          description: Не найдено
+        '409':
+          description: Конфликт
+        '422':
+          description: Нарушено бизнес-правило
+    post:
+      tags:
+      - books
+      summary: Оставить отзыв
+      operationId: create_review_books__book_id__reviews_post
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: book_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Book Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReviewIn'
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReviewOut'
+        '400':
+          description: Ошибка валидации
+        '401':
+          description: Не авторизован
+        '403':
+          description: Нет прав
+        '404':
+          description: Не найдено
+        '409':
+          description: Конфликт
+        '422':
+          description: Нарушено бизнес-правило
+  /reviews/{review_id}:
+    put:
+      tags:
+      - books
+      summary: Изменить отзыв (автор/admin)
+      operationId: update_review_reviews__review_id__put
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: review_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Review Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReviewIn'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReviewOut'
+        '400':
+          description: Ошибка валидации
+        '401':
+          description: Не авторизован
+        '403':
+          description: Нет прав
+        '404':
+          description: Не найдено
+        '409':
+          description: Конфликт
+        '422':
+          description: Нарушено бизнес-правило
+    delete:
+      tags:
+      - books
+      summary: Удалить отзыв (автор/admin)
+      operationId: delete_review_reviews__review_id__delete
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: review_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Review Id
+      responses:
+        '204':
+          description: Successful Response
+        '400':
+          description: Ошибка валидации
+        '401':
+          description: Не авторизован
+        '403':
+          description: Нет прав
+        '404':
+          description: Не найдено
+        '409':
+          description: Конфликт
+        '422':
+          description: Нарушено бизнес-правило
+  /set-cookie:
+    post:
+      tags:
+      - web
+      summary: Установить cookie (сессионная / на N дней)
+      operationId: set_cookie_set_cookie_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CookieIn'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /get-cookie:
+    get:
+      tags:
+      - web
+      summary: Прочитать cookie
+      operationId: get_cookie_get_cookie_get
+      parameters:
+      - name: name
+        in: query
+        required: true
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 64
+          title: Name
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /delete-cookie:
+    post:
+      tags:
+      - web
+      summary: Удалить cookie
+      operationId: delete_cookie_delete_cookie_post
+      parameters:
+      - name: name
+        in: query
+        required: true
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 64
+          title: Name
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /form:
+    get:
+      tags:
+      - web
+      summary: Форма с CSRF-токеном
+      operationId: form_form_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            text/html:
+              schema:
+                type: string
+  /submit:
+    post:
+      tags:
+      - web
+      summary: Приём формы с проверкой CSRF и Origin
+      operationId: submit_submit_post
+      parameters:
+      - name: origin
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Origin
+      - name: csrf_token
+        in: cookie
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Csrf Token
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Body_submit_submit_post'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            text/html:
+              schema:
+                type: string
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /echo:
+    get:
+      tags:
+      - web
+      summary: Демонстрация защиты от XSS
+      operationId: echo_echo_get
+      parameters:
+      - name: text
+        in: query
+        required: false
+        schema:
+          type: string
+          maxLength: 500
+          default: ''
+          title: Text
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            text/html:
+              schema:
+                type: string
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /settings:
+    get:
+      tags:
+      - web
+      summary: Настройки пользователя + свежий CSRF-токен
+      operationId: get_user_settings_settings_get
+      security:
+      - HTTPBearer: []
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+    post:
+      tags:
+      - web
+      summary: Сохранить настройки (нужен заголовок X-CSRF-Token)
+      operationId: save_user_settings_settings_post
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: x-csrf-token
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Csrf-Token
+      - name: csrf_token
+        in: cookie
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Csrf Token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SettingsIn'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/time:
+    get:
+      tags:
+      - web
+      summary: Текущее время сервера
+      operationId: server_time_api_time_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+  /api/long:
+    get:
+      tags:
+      - web
+      summary: Долгий запрос для проверки тайм-аутов nginx
+      operationId: long_request_api_long_get
+      parameters:
+      - name: seconds
+        in: query
+        required: false
+        schema:
+          type: number
+          maximum: 600
+          minimum: 0
+          default: 2
+          title: Seconds
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /debug/flaky:
+    get:
+      tags:
+      - web
+      summary: Иногда падает (для разбора по request_id)
+      operationId: flaky_debug_flaky_get
+      parameters:
+      - name: fail_rate
+        in: query
+        required: false
+        schema:
+          type: number
+          maximum: 1
+          minimum: 0
+          default: 0.3
+          title: Fail Rate
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /admin/email-queue:
+    get:
+      tags:
+      - web
+      summary: Размер очереди писем (admin)
+      operationId: queue_size_admin_email_queue_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+      security:
+      - HTTPBearer: []
+  /admin/email-queue/process:
+    post:
+      tags:
+      - web
+      summary: Обработать очередь вручную (admin)
+      operationId: queue_process_admin_email_queue_process_post
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+      security:
+      - HTTPBearer: []
+components:
+  schemas:
+    Body_submit_submit_post:
+      properties:
+        message:
+          type: string
+          maxLength: 500
+          title: Message
+        csrf_token:
+          type: string
+          title: Csrf Token
+          default: ''
+      type: object
+      required:
+      - message
+      title: Body_submit_submit_post
+    BookCreate:
+      properties:
+        title:
+          type: string
+          maxLength: 200
+          minLength: 1
+          title: Title
+        author:
+          type: string
+          maxLength: 100
+          minLength: 2
+          title: Author
+        isbn:
+          type: string
+          title: Isbn
+        year:
+          type: integer
+          minimum: 1450.0
+          title: Year
+        genre:
+          anyOf:
+          - type: string
+            maxLength: 50
+          - type: 'null'
+          title: Genre
+        price:
+          anyOf:
+          - type: number
+            minimum: 0.0
+          - type: string
+            pattern: ^(?!^[-+.]*$)[+-]?0*(?:\d{0,8}|(?=[\d.]{1,11}0*$)\d{0,8}\.\d{0,2}0*$)
+          title: Price
+          default: '0'
+        copies_total:
+          type: integer
+          maximum: 1000.0
+          minimum: 0.0
+          title: Copies Total
+          default: 1
+      additionalProperties: false
+      type: object
+      required:
+      - title
+      - author
+      - isbn
+      - year
+      title: BookCreate
+      example:
+        author: Михаил Булгаков
+        copies_total: 3
+        genre: роман
+        isbn: '9785170900000'
+        price: '450.00'
+        title: Мастер и Маргарита
+        year: 1967
+    BookOut:
+      properties:
+        id:
+          type: integer
+          title: Id
+        title:
+          type: string
+          title: Title
+        author:
+          type: string
+          title: Author
+        isbn:
+          type: string
+          title: Isbn
+        year:
+          type: integer
+          title: Year
+        genre:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Genre
+        price:
+          type: string
+          pattern: ^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$
+          title: Price
+        copies_total:
+          type: integer
+          title: Copies Total
+        copies_available:
+          type: integer
+          title: Copies Available
+      type: object
+      required:
+      - id
+      - title
+      - author
+      - isbn
+      - year
+      - genre
+      - price
+      - copies_total
+      - copies_available
+      title: BookOut
+    BookPatch:
+      properties:
+        title:
+          anyOf:
+          - type: string
+            maxLength: 200
+            minLength: 1
+          - type: 'null'
+          title: Title
+        author:
+          anyOf:
+          - type: string
+            maxLength: 100
+            minLength: 2
+          - type: 'null'
+          title: Author
+        genre:
+          anyOf:
+          - type: string
+            maxLength: 50
+          - type: 'null'
+          title: Genre
+        price:
+          anyOf:
+          - type: number
+            minimum: 0.0
+          - type: string
+            pattern: ^(?!^[-+.]*$)[+-]?0*(?:\d{0,8}|(?=[\d.]{1,11}0*$)\d{0,8}\.\d{0,2}0*$)
+          - type: 'null'
+          title: Price
+        copies_total:
+          anyOf:
+          - type: integer
+            maximum: 1000.0
+            minimum: 0.0
+          - type: 'null'
+          title: Copies Total
+      additionalProperties: false
+      type: object
+      title: BookPatch
+    CookieIn:
+      properties:
+        name:
+          type: string
+          maxLength: 64
+          minLength: 1
+          pattern: ^[A-Za-z0-9_\-]+$
+          title: Name
+        value:
+          type: string
+          maxLength: 256
+          title: Value
+        days:
+          anyOf:
+          - type: integer
+            maximum: 365.0
+            minimum: 0.0
+          - type: 'null'
+          title: Days
+      type: object
+      required:
+      - name
+      - value
+      title: CookieIn
+    HTTPValidationError:
+      properties:
+        detail:
+          items:
+            $ref: '#/components/schemas/ValidationError'
+          type: array
+          title: Detail
+      type: object
+      title: HTTPValidationError
+    LoanOut:
+      properties:
+        id:
+          type: integer
+          title: Id
+        user_id:
+          type: integer
+          title: User Id
+        book_id:
+          type: integer
+          title: Book Id
+        taken_at:
+          type: string
+          format: date-time
+          title: Taken At
+        due_at:
+          type: string
+          format: date-time
+          title: Due At
+        returned_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Returned At
+      type: object
+      required:
+      - id
+      - user_id
+      - book_id
+      - taken_at
+      - due_at
+      - returned_at
+      title: LoanOut
+    LoginIn:
+      properties:
+        email:
+          type: string
+          format: email
+          title: Email
+        password:
+          type: string
+          maxLength: 72
+          minLength: 1
+          title: Password
+      type: object
+      required:
+      - email
+      - password
+      title: LoginIn
+    Page_BookOut_:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/BookOut'
+          type: array
+          title: Items
+        total:
+          type: integer
+          title: Total
+        page:
+          type: integer
+          title: Page
+        size:
+          type: integer
+          title: Size
+        pages:
+          type: integer
+          title: Pages
+      type: object
+      required:
+      - items
+      - total
+      - page
+      - size
+      - pages
+      title: Page[BookOut]
+    Page_UserOut_:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/UserOut'
+          type: array
+          title: Items
+        total:
+          type: integer
+          title: Total
+        page:
+          type: integer
+          title: Page
+        size:
+          type: integer
+          title: Size
+        pages:
+          type: integer
+          title: Pages
+      type: object
+      required:
+      - items
+      - total
+      - page
+      - size
+      - pages
+      title: Page[UserOut]
+    RefreshIn:
+      properties:
+        refresh_token:
+          type: string
+          title: Refresh Token
+      type: object
+      required:
+      - refresh_token
+      title: RefreshIn
+    ReviewIn:
+      properties:
+        rating:
+          type: integer
+          maximum: 5.0
+          minimum: 1.0
+          title: Rating
+        text:
+          type: string
+          maxLength: 2000
+          minLength: 1
+          title: Text
+      additionalProperties: false
+      type: object
+      required:
+      - rating
+      - text
+      title: ReviewIn
+    ReviewOut:
+      properties:
+        id:
+          type: integer
+          title: Id
+        user_id:
+          type: integer
+          title: User Id
+        book_id:
+          type: integer
+          title: Book Id
+        rating:
+          type: integer
+          title: Rating
+        text:
+          type: string
+          title: Text
+        created_at:
+          type: string
+          format: date-time
+          title: Created At
+      type: object
+      required:
+      - id
+      - user_id
+      - book_id
+      - rating
+      - text
+      - created_at
+      title: ReviewOut
+    SettingsIn:
+      properties:
+        theme:
+          type: string
+          pattern: ^(light|dark)$
+          title: Theme
+        language:
+          type: string
+          pattern: ^(ru|en)$
+          title: Language
+          default: ru
+      type: object
+      required:
+      - theme
+      title: SettingsIn
+    TokenPair:
+      properties:
+        access_token:
+          type: string
+          title: Access Token
+        refresh_token:
+          type: string
+          title: Refresh Token
+        token_type:
+          type: string
+          title: Token Type
+          default: bearer
+        expires_in:
+          type: integer
+          title: Expires In
+      type: object
+      required:
+      - access_token
+      - refresh_token
+      - expires_in
+      title: TokenPair
+    UserCreate:
+      properties:
+        name:
+          type: string
+          maxLength: 50
+          minLength: 2
+          title: Name
+        email:
+          type: string
+          maxLength: 100
+          format: email
+          title: Email
+        age:
+          type: integer
+          maximum: 120.0
+          minimum: 18.0
+          title: Age
+        password:
+          type: string
+          maxLength: 72
+          minLength: 8
+          title: Password
+      additionalProperties: false
+      type: object
+      required:
+      - name
+      - email
+      - age
+      - password
+      title: UserCreate
+      example:
+        age: 25
+        email: anna@example.com
+        name: Анна Петрова
+        password: secret123
+    UserOut:
+      properties:
+        id:
+          type: integer
+          title: Id
+        name:
+          type: string
+          title: Name
+        email:
+          type: string
+          title: Email
+        age:
+          type: integer
+          title: Age
+        role:
+          type: string
+          title: Role
+        created_at:
+          type: string
+          format: date-time
+          title: Created At
+      type: object
+      required:
+      - id
+      - name
+      - email
+      - age
+      - role
+      - created_at
+      title: UserOut
+    UserPatch:
+      properties:
+        name:
+          anyOf:
+          - type: string
+            maxLength: 50
+            minLength: 2
+          - type: 'null'
+          title: Name
+        email:
+          anyOf:
+          - type: string
+            maxLength: 100
+            format: email
+          - type: 'null'
+          title: Email
+        age:
+          anyOf:
+          - type: integer
+            maximum: 120.0
+            minimum: 18.0
+          - type: 'null'
+          title: Age
+      additionalProperties: false
+      type: object
+      title: UserPatch
+      description: 'PATCH: частичное обновление. Отсутствующее поле = не менять; null запрещён.'
+    UserReplace:
+      properties:
+        name:
+          type: string
+          maxLength: 50
+          minLength: 2
+          title: Name
+        email:
+          type: string
+          maxLength: 100
+          format: email
+          title: Email
+        age:
+          type: integer
+          maximum: 120.0
+          minimum: 18.0
+          title: Age
+      additionalProperties: false
+      type: object
+      required:
+      - name
+      - email
+      - age
+      title: UserReplace
+      description: 'PUT: полная замена, все поля обязательны.'
+    ValidationError:
+      properties:
+        loc:
+          items:
+            anyOf:
+            - type: string
+            - type: integer
+          type: array
+          title: Location
+        msg:
+          type: string
+          title: Message
+        type:
+          type: string
+          title: Error Type
+        input:
+          title: Input
+        ctx:
+          type: object
+          title: Context
+      type: object
+      required:
+      - loc
+      - msg
+      - type
+      title: ValidationError
+  securitySchemes:
+    HTTPBearer:
+      type: http
+      scheme: bearer
