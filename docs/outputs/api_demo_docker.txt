@@ -1,0 +1,69 @@
+
+$ GET /health
+{"status":"ok","checks":{"database":"ok","redis":"ok"},"email_queue":0,"check_ms":4.0}
+
+$ POST /users (валидные данные) -> 201
+HTTP/1.1 201 Created
+location: /users/3
+x-request-id: 965b44ce83b58a738b040802c0472d7d
+{"id":3,"name":"Anna Petrova","email":"anna@example.com","age":25,"role":"user","created_at":"2026-11-15T20:08:25.119651Z"}
+
+$ POST /users (невалидные данные из задания 1 занятия 4) -> 400
+{"error":{"code":"VALIDATION_ERROR","message":"Данные запроса не прошли проверку","details":[{"field":"name","message":"String should have at least 2 characters","type":"string_too_short"},{"field":"email","message":"value is not a valid email address: An email address must have an @-sign.","type":"value_error"},{"field":"age","message":"Input should be greater than or equal to 18","type":"greater_than_equal"},{"field":"password","message":"String should have at least 8 characters","type":"string_too_short"}],"request_id":"1204944c759b0f115ea8b011d546a1a7"}}
+
+$ POST /users (повтор email) -> 409
+{"error":{"code":"CONFLICT","message":"Пользователь с таким email уже существует","details":[{"field":"email","message":"email уже занят"}],"request_id":"8916db2d3b35bfb83197d145d12f0456"}}
+
+$ POST /users (age = "abc") -> 400
+{"error":{"code":"VALIDATION_ERROR","message":"Данные запроса не прошли проверку","details":[{"field":"age","message":"Input should be a valid integer","type":"int_type"}],"request_id":"4bad9589ea57bbc214f0d09cb6b78b38"}}
+
+$ GET /users/999 -> 404
+{"error":{"code":"NOT_FOUND","message":"Пользователь 999 не найден","details":[],"request_id":"1616807ce4c574c4f4f3eb68164409ba"}}
+
+$ POST /auth/login -> пара токенов
+{"access_token":"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjozLCJlbWFpbCI6ImFubmFAZXhhbXBsZS5jb20iLCJyb2xlIjoidX...
+
+$ GET /auth/profile без токена -> 401
+HTTP/1.1 401 Unauthorized
+www-authenticate: Bearer
+{"error":{"code":"UNAUTHORIZED","message":"Требуется заголовок Authorization: Bearer <token>","details":[],"request_id":"035263fa00852de0beb1029a7e401cc7"}}
+
+$ GET /auth/profile с токеном -> 200
+{"id":3,"name":"Anna Petrova","email":"anna@example.com","age":25,"role":"user","created_at":"2026-11-15T20:08:25.119651Z"}
+
+$ POST /books читателем -> 403
+{"error":{"code":"FORBIDDEN","message":"Нужно право books.write","details":[],"request_id":"13d1fba9112c0f45f08a9ea5c7973751"}}
+
+$ POST /books админом -> 201
+{"id":1,"title":"Война и мир","author":"Лев Толстой","isbn":"9785170900001","year":1869,"genre":"роман","price":"650.00","copies_total":1,"copies_available":1}
+
+$ GET /books?genre=роман&sort=price&order=desc&page=1&size=10
+{"items":[{"id":1,"title":"Война и мир","author":"Лев Толстой","isbn":"9785170900001","year":1869,"genre":"роман","price":"650.00","copies_total":1,"copies_available":1}],"total":1,"page":1,"size":10,"pages":1}
+
+$ POST /books/1/loans (Idempotency-Key: k-1) -> 201
+{"id":1,"user_id":3,"book_id":1,"taken_at":"2026-11-15T20:08:29.079172Z","due_at":"2026-11-29T20:08:29.079172Z","returned_at":null}
+
+$ тот же запрос повторно (сеть моргнула) -> тот же ответ, вторая выдача не создаётся
+HTTP/1.1 201 Created
+idempotent-replay: true
+{"id":1,"user_id":3,"book_id":1,"taken_at":"2026-11-15T20:08:29.079172Z","due_at":"2026-11-29T20:08:29.079172Z","returned_at":null}
+
+$ POST /books/1/loans без ключа -> 409 (уже на руках)
+{"error":{"code":"CONFLICT","message":"Эта книга уже у вас на руках","details":[],"request_id":"97646be833b609a32407659da6ec9de3"}}
+
+$ GET /books/1 (остаток 0)
+{"id":1,"title":"Война и мир","author":"Лев Толстой","isbn":"9785170900001","year":1869,"genre":"роман","price":"650.00","copies_total":1,"copies_available":0}
+
+$ POST /auth/refresh -> новая пара; старый refresh повторно -> 401
+{"access_token":"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjozLCJlbWFpbC...
+{"error":{"code":"UNAUTHORIZED","message":"Refresh-токен отозван или уже использован","details":[],"request_id":"dc08b4e331374ce478c31995899fdefb"}}
+
+$ GET /debug/flaky?fail_rate=1 -> 500 с request_id для поиска по логам
+HTTP/1.1 500 Internal Server Error
+x-request-id: e68c927acb1668fe88b17e82d713394d
+{"error":{"code":"INTERNAL_ERROR","message":"Внутренняя ошибка сервера","details":[],"request_id":"e68c927acb1668fe88b17e82d713394d"}}
+
+$ GET /metrics (фрагмент)
+http_requests_total{endpoint="/users",method="POST",status="201"} 1.0
+http_requests_total{endpoint="/users",method="POST",status="400"} 2.0
+http_requests_total{endpoint="/users",method="POST",status="409"} 1.0

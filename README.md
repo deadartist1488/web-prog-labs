@@ -63,29 +63,34 @@ sh scripts/api_demo.sh                   # сценарий работы с API 
 `docker compose -f docker-compose.test.yml up -d`, затем
 `TEST_DATABASE_URL=postgresql://test:test@localhost:5433/test_db pytest -m postgres`.
 
-**Как проверялось.** На машине, где делались лабы, Docker не было, поэтому стенд поднимался так же, но без
-контейнеров:
+**Как проверялось.** Стенд запущен в Docker Desktop (`docker compose up -d --build`):
 
-- PostgreSQL 16 через `pgserver`;
+- все 7 контейнеров поднялись, приложения, PostgreSQL и Redis в статусе `healthy`;
+- миграции применились;
+- nginx делит запросы между `app1` и `app2` поровну, rate limit отдаёт 429;
+- Prometheus видит обе цели, worker отправляет письма из очереди.
+
+Вывод: [`docs/outputs/docker_checks.txt`](docs/outputs/docker_checks.txt) и
+[`docs/outputs/api_demo_docker.txt`](docs/outputs/api_demo_docker.txt), команда `sh scripts/docker_checks.sh`.
+Ту же схему можно запустить и без Docker (так делались первые прогоны):
+
+- PostgreSQL через `pgserver`;
 - общий Redis через `scripts/local_redis.py`;
-- два экземпляра uvicorn на портах 8000 и 8001;
-- portable nginx 1.26.2 с `nginx/nginx.local.conf` (порты 8080 и 8443).
-
-Все выводы в `docs/outputs/` и скриншоты получены на этом стенде. `docker-compose.yml` и `nginx/nginx.conf` повторяют
-ту же схему для Docker.
+- два uvicorn на 8000 и 8001;
+- portable nginx с `nginx/nginx.local.conf` (`nginx_checks.txt`, `api_demo.txt`).
 
 ## Скриншоты и вывод команд
 
 | Лаба | Скриншоты (`docs/screenshots/`) | Вывод команд (`docs/outputs/`) |
 |---|---|---|
-| 1 | `health.png` | `lab01_curl_httpbin.txt` |
+| 1 | `health.png` | `lab01_curl_httpbin.txt`, `docker_checks.txt` (compose ps, миграции) |
 | 2 | `swagger_ui.png`, `books_list.png`, `users_404.png` | `lab02_httpbin_jsonplaceholder.txt`, `api_demo.txt` |
 | 3 | `users_404.png` | `api_demo.txt` (400 / 404 / 409) |
 | 5 | — | `pytest_coverage.txt` |
 | 6 | `form_csrf.png` | `api_demo.txt` (login, refresh, Idempotency-Key), `demos.txt` (pool) |
 | 7 | — | `lab07_demo.txt` |
-| 8 | `static_page.png`, `xss_escaped.png` | `nginx_checks.txt`, `demos.txt` (SQL-инъекция, bcrypt) |
-| 9 | `metrics.png` | `log_trace.txt` |
+| 8 | `static_page.png`, `xss_escaped.png` | `nginx_checks.txt`, `docker_checks.txt`, `demos.txt` (SQL-инъекция, bcrypt) |
+| 9 | `metrics.png`, `prometheus_targets.png`, `prometheus_alerts.png` | `log_trace.txt`, `docker_checks.txt` |
 | 10 | — | `api_demo.txt` (Idempotency-Key), тесты `test_diagnostics_jobs.py` |
 
 ## Структура

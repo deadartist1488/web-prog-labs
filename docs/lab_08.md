@@ -23,7 +23,10 @@ cd tools/nginx-1.26.2 && ./nginx.exe -c ../../nginx/nginx.local.conf && cd ../..
 sh scripts/nginx_checks.sh > docs/outputs/nginx_checks.txt
 ```
 
-Результаты проверок: [`outputs/nginx_checks.txt`](outputs/nginx_checks.txt). Скриншоты страниц через nginx:
+Результаты проверок: [`outputs/nginx_checks.txt`](outputs/nginx_checks.txt) (без Docker) и
+[`outputs/docker_checks.txt`](outputs/docker_checks.txt) (в Docker). В Docker 20 запросов поделились поровну, по 10
+на `app1` и `app2` (адреса контейнеров `172.18.0.5/6:8000` в `upstream=`). Из 60 одновременных запросов 12 получили
+429. Скриншоты страниц через nginx:
 `screenshots/static_page.png`, `health.png`, `swagger_ui.png`.
 
 | Что | Как настроено | Проверка |

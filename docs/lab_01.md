@@ -24,6 +24,22 @@ curl -k https://localhost/health
 Ответ `/health`: `{"status":"ok","checks":{"database":"ok","redis":"ok"},"email_queue":0,...}`
 (скриншот `screenshots/health.png`).
 
+Результат `docker compose up -d --build` (полный вывод в [`outputs/docker_checks.txt`](outputs/docker_checks.txt)):
+
+```
+SERVICE      IMAGE                     STATUS                        PORTS
+app1         web-prog-labs-app1        Up About a minute (healthy)   8000/tcp
+app2         web-prog-labs-app2        Up About a minute (healthy)   8000/tcp
+nginx        nginx:1.27-alpine         Up 55 seconds                 0.0.0.0:80->80/tcp, 0.0.0.0:443->443/tcp
+postgres     postgres:15-alpine        Up About a minute (healthy)   5432/tcp
+prometheus   prom/prometheus:v2.54.1   Up About a minute             0.0.0.0:9090->9090/tcp
+redis        redis:7-alpine            Up About a minute (healthy)   6379/tcp
+worker       web-prog-labs-worker      Up About a minute             8000/tcp
+```
+
+Наружу опубликованы только nginx (80/443) и Prometheus (9090). Приложения, БД и Redis доступны лишь внутри сети
+compose.
+
 Как устроен `Dockerfile`: слим-образ `python:3.12-slim`, сначала копируется только `requirements.txt`, поэтому слой с
 зависимостями кэшируется. Приложение запускается не от root, есть `HEALTHCHECK`. В `docker-compose.yml` у `postgres` и
 `redis` есть healthcheck, а приложения стартуют через `depends_on: condition: service_healthy`, то есть только когда БД

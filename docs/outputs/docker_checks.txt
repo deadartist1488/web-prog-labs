@@ -1,0 +1,55 @@
+## docker compose ps
+SERVICE      IMAGE                     STATUS                        PORTS
+app1         web-prog-labs-app1        Up About a minute (healthy)   8000/tcp
+app2         web-prog-labs-app2        Up About a minute (healthy)   8000/tcp
+nginx        nginx:1.27-alpine         Up 55 seconds                 0.0.0.0:80->80/tcp, [::]:80->80/tcp, 0.0.0.0:443->443/tcp, [::]:443->443/tcp
+postgres     postgres:15-alpine        Up About a minute (healthy)   5432/tcp
+prometheus   prom/prometheus:v2.54.1   Up About a minute             0.0.0.0:9090->9090/tcp, [::]:9090->9090/tcp
+redis        redis:7-alpine            Up About a minute (healthy)   6379/tcp
+worker       web-prog-labs-worker      Up About a minute             8000/tcp
+
+## версии
+PostgreSQL 15.20 on x86_64-pc-linux-musl, compiled by gcc (A
+redis_version:7.4.12
+nginx version: nginx/1.27.5
+
+## health и редирект
+{"status":"ok","checks":{"database":"ok","redis":"ok"},"email_queue":0,"check_ms":3.4}
+GET http://localhost/health -> 301 Location: https://localhost/health
+
+## миграции применились (docker-entrypoint-initdb.d)
+         List of relations
+ Schema |  Name   | Type  |  Owner  
+--------+---------+-------+---------
+ public | books   | table | library
+ public | loans   | table | library
+ public | reviews | table | library
+ public | users   | table | library
+(4 rows)
+
+
+## балансировка: 20 запросов, кто ответил (по access-логу nginx)
+     10 upstream=172.18.0.5:8000
+     10 upstream=172.18.0.6:8000
+
+## rate limit: 60 одновременных запросов
+     48 200
+     12 429
+
+## Prometheus: цели и правила
+http://app1:8000/metrics -> up
+http://app2:8000/metrics -> up
+"name":"HighErrorRate"
+"name":"SlowResponses"
+"name":"EmailQueueGrowing"
+"name":"InstanceDown"
+
+## worker разбирает очередь писем
+{"ts": "2026-11-15T20:08:25.755+00:00", "level": "INFO", "logger": "app.infra", "request_id": "-", "msg": "email sent", "context": {"job_id": "welcome-3", "subject": "Добро пожаловать в библиотеку"}}
+
+## запрос с ошибкой: request_id -> логи обоих экземпляров
+request_id=42c2a6f908d285a681e901baefa806fb
+app2-1  | {"ts": "2026-11-15T20:09:11.200+00:00", "level": "INFO", "logger": "app.web", "request_id": "42c2a6f908d285a681e901baefa806fb", "msg": "flaky: start", "context": {"roll": 0.058, "fail_rate": 1.0}}
+app2-1  | {"ts": "2026-11-15T20:09:11.200+00:00", "level": "INFO", "logger": "app.web", "request_id": "42c2a6f908d285a681e901baefa806fb", "msg": "flaky: dividing by remaining stock"}
+app2-1  | {"ts": "2026-11-15T20:09:11.201+00:00", "level": "ERROR", "logger": "app.http", "request_id": "42c2a6f908d285a681e901baefa806fb", "msg": "unhandled error on GET /debug/flaky", "exc": "...ZeroDivisionError: division by zero"}
+app2-1  | {"ts": "2026-11-15T20:09:11.213+00:00", "level": "INFO", "logger": "app.http", "request_id": "42c2a6f908d285a681e901baefa806fb", "msg": "GET /debug/flaky - 500 - 0.015s", "context": {"status": 500, "duration_ms": 15.3, "client_ip": "172.18.0.1", "query": "fail_rate=1"}}

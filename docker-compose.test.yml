@@ -2,6 +2,8 @@
 #   docker compose -f docker-compose.test.yml up -d
 #   TEST_DATABASE_URL=postgresql://test:test@localhost:5433/test_db TEST_REDIS_URL=redis://localhost:6380/0 pytest
 #   docker compose -f docker-compose.test.yml down -v
+name: web-prog-labs-test   # отдельный проект: не пересекается с основным стендом
+
 services:
   test-db:
     image: postgres:15-alpine
